@@ -1,0 +1,14 @@
+metadata for stego file, total size = 287 bytes, placed at the beginning
+
+------------------------------
+bytes - information
+------------------------------
+4 - format code (always "STGO")
+8 - secret file length
+1 - secret file name length
+255 - secret file name (max 255 chars)
+1 - secret file extension length
+15 - secret file extension (max 15 chars, if ".txt" then just write "txt", so only 3 chars = 3 bytes)
+1 - is encrypt
+1 - is random start
+1 - n-lsb
