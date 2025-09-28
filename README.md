@@ -11,7 +11,7 @@
    - Apache Maven 3.9.11
 
 ## Dependencies
-   - [mp3spi](https://central.sonatype.com/artifact/com.googlecode.soundlibs/mp3spi): For handling MP3 audio files.
+   - [jaudiotagger](https://central.sonatype.com/artifact/net.jthink/jaudiotagger): For handling MP3 audio files.
    - [picocli](https://central.sonatype.com/artifact/info.picocli/picocli): For building command-line interfaces.
 
 ## How to Run the Program
