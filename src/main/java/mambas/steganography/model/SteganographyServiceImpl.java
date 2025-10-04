@@ -51,7 +51,7 @@ public class SteganographyServiceImpl implements SteganographyService {
 
         byte[] secretBytes = Files.readAllBytes(secretFile);
         if (options.encrypt()) {
-            secretBytes = encryptDecrypt(secretBytes, options.key());
+            secretBytes = encryptDecrypt(secretBytes, options.key(), true);
         }
 
         byte[] metadata = createMetadata(secretFile, secretBytes.length, options);
@@ -113,7 +113,7 @@ public class SteganographyServiceImpl implements SteganographyService {
         byte[] extractedSecretBytes = secretExtractionResult.modifiedAudioData();
 
         if (isEncrypted) {
-            extractedSecretBytes = encryptDecrypt(extractedSecretBytes, options.key());
+            extractedSecretBytes = encryptDecrypt(extractedSecretBytes, options.key(), false);
         }
 
         Files.write(outputFile, extractedSecretBytes);
@@ -285,14 +285,25 @@ public class SteganographyServiceImpl implements SteganographyService {
         return buffer.array();
     }
 
-    private byte[] encryptDecrypt(byte[] data, String key) {
+    // Vigenere Cipher
+    private byte[] encryptDecrypt(byte[] data, String key, boolean encrypt) {
         if (key == null || key.isEmpty()) {
             throw new IllegalArgumentException("Key cannot be null or empty for encryption/decryption.");
         }
         byte[] result = new byte[data.length];
         byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
         for (int i = 0; i < data.length; i++) {
-            result[i] = (byte) (data[i] ^ keyBytes[i % keyBytes.length]);
+            int dataByte = data[i] & 0xFF;
+            int shift = keyBytes[i % keyBytes.length] & 0xFF;
+
+            int processedByte;
+            if (encrypt) {
+                processedByte = (dataByte + shift) % 256;      // Enkripsi
+            } else {
+                processedByte = (dataByte - shift + 256) % 256; // Dekripsi
+            }
+
+            result[i] = (byte) processedByte;
         }
         return result;
     }
