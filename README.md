@@ -7,17 +7,17 @@
    - Encryption Support: Encrypts the secret message using the extended Vigenere cipher (full 256-character set) for an added layer of security.
 
 ## Tech Stack
-   - Java (Java JDK 25)
-   - Apache Maven 3.9.11
+   - [Java (Java JDK 25)](https://jdk.java.net/25/)
+   - [Apache Maven 3.9.11](https://maven.apache.org/docs/3.9.11/release-notes.html)
 
 ## Dependencies
    - [jaudiotagger](https://central.sonatype.com/artifact/net.jthink/jaudiotagger): For handling MP3 audio files.
    - [picocli](https://central.sonatype.com/artifact/info.picocli/picocli): For building command-line interfaces.
 
 ## How to Run the Program
-   1. Install Java JDK
+   1. Install Java JDK and Apache Maven
    2. Go to the project root directory
-   3. (optional) Install Apache Maven, then build the project using Maven
+   3. Build the project using Maven
       ```bash
       mvn clean package
       ```
@@ -39,7 +39,7 @@
    ```bash
    java -jar target/steganography-1.0-SNAPSHOT.jar hide \
    --cover="path/to/your/music.mp3" \
-   --secret="path/to/your/secret.pdf" \
+   --secret="path/to/your/secret.txt" \
    --output="path/to/stego_music.mp3" \
    --nlsb=2 \
    --encrypt \
@@ -47,15 +47,12 @@
    --key="secretkey123"
    ```
 
-   Example for extracting message:  
-   (sementara output file wajib dituliskan)
+   Example for extracting message:
    ```bash
    java -jar target/steganography-1.0-SNAPSHOT.jar extract \
    --input="path/to/stego_music.mp3" \
-   --output="path/to/extracted_secret.pdf" \
+   --output="path/to/extracted_secret.txt" \
    --nlsb=2 \
-   --encrypt \
-   --random-start \
    --key="secretkey123"
    ```
 

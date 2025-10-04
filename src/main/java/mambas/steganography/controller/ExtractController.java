@@ -30,12 +30,6 @@ public class ExtractController implements Callable<Integer> {
     @Option(names = {"-n", "--nlsb"}, required = true, description = "Number of LSB used (1-4).")
     private int nLsb;
 
-    @Option(names = {"-e", "--encrypt"}, description = "Flag indicating the message is encrypted (requires key).")
-    private boolean encrypt;
-
-    @Option(names = {"-r", "--random-start"}, description = "Flag indicating random starting point for insertion is used.")
-    private boolean randomStart;
-
     @Option(names = {"-k", "--key"}, description = "Key for decryption and/or seed.")
     private String key;
 
@@ -43,14 +37,14 @@ public class ExtractController implements Callable<Integer> {
     public Integer call() {
         try {
             validateInputs();
-            StegoOptions options = new StegoOptions(key, nLsb, encrypt, randomStart);
+            StegoOptions options = new StegoOptions(key, nLsb, false, false);
             view.showMessage("Starting extraction process...");
             service.extractMessage(inputFile, outputFile, options);
             view.showSuccess("Message successfully extracted. Check file in " + outputFile.getParent());
             return 0;
         } catch (Exception e) {
             view.showError(e.getMessage());
-            e.printStackTrace(); // Uncomment for debugging
+            // e.printStackTrace(); // Uncomment for debugging
             return 1;
         }
     }

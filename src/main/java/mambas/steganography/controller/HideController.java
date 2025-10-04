@@ -60,7 +60,7 @@ public class HideController implements Callable<Integer> {
             return 0;
         } catch (Exception e) {
             view.showError(e.getMessage());
-            e.printStackTrace(); // Uncomment for debugging
+            // e.printStackTrace(); // Uncomment for debugging
             return 1;
         }
     }
