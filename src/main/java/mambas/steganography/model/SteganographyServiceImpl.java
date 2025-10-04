@@ -25,12 +25,6 @@ public class SteganographyServiceImpl implements SteganographyService {
     private static final int FILENAME_MAX_LEN = 255;
     private static final int FILE_EXT_MAX_LEN = 15;
 
-    // --- HELPER METHODS FOR THE SIMPLIFIED ALGORITHM ---
-
-    /**
-     * Checks if the bytes at a given offset represent an MP3 sync word.
-     * A sync word is 11 consecutive '1' bits.
-     */
     private boolean isSyncWord(byte[] data, int offset) {
         if (offset + 1 >= data.length) {
             return false;
@@ -38,12 +32,6 @@ public class SteganographyServiceImpl implements SteganographyService {
         return (data[offset] & 0xFF) == 0xFF && (data[offset + 1] & 0xE0) == 0xE0;
     }
 
-    /**
-     * Finds the next occurrence of a sync word in the data.
-     * @param data The byte array to search.
-     * @param startOffset The position to start searching from.
-     * @return The offset of the next sync word, or -1 if not found.
-     */
     private int findNextSyncWord(byte[] data, int startOffset) {
         for (int i = startOffset; i < data.length - 1; i++) {
             if (isSyncWord(data, i)) {
@@ -53,7 +41,7 @@ public class SteganographyServiceImpl implements SteganographyService {
         return -1;
     }
 
-    // --- CORE IMPLEMENTATION (REWRITTEN) ---
+    private record EmbedResult(byte[] modifiedAudioData, int bytesWrittenToAudio) {}
 
     @Override
     public void hideMessage(Path coverFile, Path secretFile, Path outputFile, StegoOptions options) throws Exception {
@@ -67,23 +55,27 @@ public class SteganographyServiceImpl implements SteganographyService {
         }
 
         byte[] metadata = createMetadata(secretFile, secretBytes.length, options);
+        System.out.println("metadata:");
+        System.out.println(bytesToHex(metadata));
 
-        // Capacity check is now an approximation
         if ((long) (metadata.length + secretBytes.length) * 8 > (long) audioData.length * options.nLsb()) {
             throw new IllegalArgumentException("Secret file is too large for the available space.");
         }
 
-        byte[] stegoAudioData = embedPayloadBySearching(audioData, metadata, 0, options.nLsb());
+        EmbedResult metadataResult = embedPayloadBySearching(audioData, metadata, 0, options.nLsb());
+        byte[] stegoAudioWithMetadata = metadataResult.modifiedAudioData();
+        int metadataEndOffset = metadataResult.bytesWrittenToAudio();
+        System.out.println("metadataEndOffset: " + metadataEndOffset);
 
-        // This is a simplified calculation for the start offset
-        int approxMetadataBytesUsed = (int)Math.ceil((double)metadata.length * 8 / options.nLsb());
-        int secretStartOffset = getSecretStartOffset(options.key(), audioData.length, approxMetadataBytesUsed, secretBytes.length, options.nLsb(), options.randomStart());
+        int secretStartOffset = getSecretStartOffset(options.key(), audioData.length, metadataEndOffset, secretBytes.length, options.nLsb(), options.randomStart());
+        System.out.println("secretStartOffset: " + secretStartOffset);
 
-        stegoAudioData = embedPayloadBySearching(stegoAudioData, secretBytes, secretStartOffset, options.nLsb());
+        EmbedResult finalResult = embedPayloadBySearching(stegoAudioWithMetadata, secretBytes, secretStartOffset, options.nLsb());
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         outputStream.write(coverBytes, 0, dataOffset);
-        outputStream.write(stegoAudioData);
+        outputStream.write(finalResult.modifiedAudioData());
+//        outputStream.write(stegoAudioWithMetadata);
         Files.write(outputFile, outputStream.toByteArray());
     }
 
@@ -93,7 +85,11 @@ public class SteganographyServiceImpl implements SteganographyService {
         int dataOffset = findAudioDataOffset(stegoFile);
         byte[] stegoAudioData = Arrays.copyOfRange(stegoBytes, dataOffset, stegoBytes.length);
 
-        byte[] extractedMetadata = extractPayloadBySearching(stegoAudioData, 0, METADATA_SIZE, options.nLsb());
+        EmbedResult metadataExtractionInfo = extractPayloadBySearching(stegoAudioData, 0, METADATA_SIZE, options.nLsb());
+        byte[] extractedMetadata = metadataExtractionInfo.modifiedAudioData();
+        int metadataEndOffset = metadataExtractionInfo.bytesWrittenToAudio();
+        System.out.println("extractedMetadata:");
+        System.out.println(bytesToHex(extractedMetadata));
 
         ByteBuffer metaBuffer = ByteBuffer.wrap(extractedMetadata);
         byte[] magic = new byte[4];
@@ -104,14 +100,17 @@ public class SteganographyServiceImpl implements SteganographyService {
 
         long secretFileLength = metaBuffer.getLong();
         metaBuffer.position(4 + 8 + 1 + FILENAME_MAX_LEN + 1 + FILE_EXT_MAX_LEN);
-        boolean isEncrypted = (options.encrypt());
-        boolean isRandomStart = (options.randomStart());
+
+        boolean isEncrypted = (metaBuffer.get() == 1);
+        System.out.println("isEncrypted: " + isEncrypted);
+        boolean isRandomStart = (metaBuffer.get() == 1);
+        System.out.println("isRandomStart: " + isRandomStart);
         int nLsb = options.nLsb();
 
-        int approxMetadataBytesUsed = (int)Math.ceil((double)METADATA_SIZE * 8 / nLsb);
-        int secretStartOffset = getSecretStartOffset(options.key(), stegoAudioData.length, approxMetadataBytesUsed, (int)secretFileLength, nLsb, isRandomStart);
+        int secretStartOffset = getSecretStartOffset(options.key(), stegoAudioData.length, metadataEndOffset, (int)secretFileLength, nLsb, isRandomStart);
 
-        byte[] extractedSecretBytes = extractPayloadBySearching(stegoAudioData, secretStartOffset, (int) secretFileLength, nLsb);
+        EmbedResult secretExtractionResult = extractPayloadBySearching(stegoAudioData, secretStartOffset, (int) secretFileLength, nLsb);
+        byte[] extractedSecretBytes = secretExtractionResult.modifiedAudioData();
 
         if (isEncrypted) {
             extractedSecretBytes = encryptDecrypt(extractedSecretBytes, options.key());
@@ -120,7 +119,8 @@ public class SteganographyServiceImpl implements SteganographyService {
         Files.write(outputFile, extractedSecretBytes);
     }
 
-    private byte[] embedPayloadBySearching(byte[] audioData, byte[] payload, int startOffset, int nLsb) {
+    private EmbedResult embedPayloadBySearching(byte[] audioData, byte[] payload, int startOffset, int nLsb) {
+        System.out.println("startOffset: " + startOffset);
         byte[] result = audioData.clone();
         int mask = (0xFF << nLsb) & 0xFF;
         int bitPool = 0;
@@ -128,46 +128,72 @@ public class SteganographyServiceImpl implements SteganographyService {
         int payloadIndex = 0;
 
         int audioCursor = startOffset;
-        while (audioCursor < result.length && payloadIndex < payload.length) {
-            // Find the start of the current frame's data. It's 4 bytes after the sync word.
-            int dataStart = findNextSyncWord(result, audioCursor);
-            if (dataStart == -1) break; // No more frames
-            dataStart += 4; // Skip the header
+        audioCursor = findNextSyncWord(result, audioCursor);
+        if (audioCursor == -1) {
+            return new EmbedResult(result, startOffset);
+        }
 
-            // Find where the next frame starts. This marks the end of our current data block.
+        // --- BUG FIX ---
+        // The main loop must continue as long as there are bits to process OR payload bytes to read.
+        while (audioCursor < result.length && (payloadIndex < payload.length || bitPoolSize > 0)) {
+            int dataStart = audioCursor + 4;
             int nextFrameStart = findNextSyncWord(result, dataStart);
             if (nextFrameStart == -1) {
-                nextFrameStart = result.length; // Embed until the end of the file
+                nextFrameStart = result.length;
             }
 
-            // Embed within the identified data block
-            for (int i = dataStart; i < nextFrameStart && payloadIndex < payload.length; i++) {
+            // The for loop iterates through the available bytes in the current frame's data section.
+            for (int i = dataStart; i < nextFrameStart; i++) {
+                // Try to fill the pool if it has less bits than we need for one operation.
                 while (bitPoolSize < nLsb && payloadIndex < payload.length) {
                     bitPool = (bitPool << 8) | (payload[payloadIndex++] & 0xFF);
                     bitPoolSize += 8;
                 }
+
+                // If the pool has enough bits, embed them.
                 if (bitPoolSize >= nLsb) {
                     int bitsToEmbed = (bitPool >> (bitPoolSize - nLsb)) & ((1 << nLsb) - 1);
                     result[i] = (byte) ((result[i] & mask) | bitsToEmbed);
                     bitPoolSize -= nLsb;
                 }
+                // Handle the very last bits of the payload.
+                else if (bitPoolSize > 0) {
+                    // Pad the remaining bits with 0s to make them nLsb long.
+                    int remainingBits = (bitPool & ((1 << bitPoolSize) - 1)) << (nLsb - bitPoolSize);
+                    result[i] = (byte) ((result[i] & mask) | remainingBits);
+                    bitPoolSize = 0; // The pool is now empty.
+                } else {
+                    // No more payload and the bit pool is empty, we can stop.
+                    break;
+                }
             }
+
+            // If we've processed the whole payload and the bit pool is empty, we can exit early.
+            if (payloadIndex >= payload.length && bitPoolSize == 0) {
+                audioCursor = nextFrameStart;
+                break;
+            }
+
             audioCursor = nextFrameStart;
         }
-        return result;
+
+        return new EmbedResult(result, audioCursor);
     }
 
-    private byte[] extractPayloadBySearching(byte[] audioData, int startOffset, int payloadLength, int nLsb) {
+    private EmbedResult extractPayloadBySearching(byte[] audioData, int startOffset, int payloadLength, int nLsb) {
         ByteArrayOutputStream extractedStream = new ByteArrayOutputStream();
         int mask = (1 << nLsb) - 1;
         int bitPool = 0;
         int bitPoolSize = 0;
 
         int audioCursor = startOffset;
+        audioCursor = findNextSyncWord(audioData, audioCursor);
+        if (audioCursor == -1) {
+            return new EmbedResult(extractedStream.toByteArray(), startOffset);
+        }
+
         while (audioCursor < audioData.length && extractedStream.size() < payloadLength) {
-            int dataStart = findNextSyncWord(audioData, audioCursor);
-            if (dataStart == -1) break;
-            dataStart += 4;
+            int dataStart = audioCursor + 4;
 
             int nextFrameStart = findNextSyncWord(audioData, dataStart);
             if (nextFrameStart == -1) {
@@ -186,29 +212,26 @@ public class SteganographyServiceImpl implements SteganographyService {
             }
             audioCursor = nextFrameStart;
         }
-        return extractedStream.toByteArray();
+        return new EmbedResult(extractedStream.toByteArray(), audioCursor);
     }
 
-    // This is now an approximation.
-    private int getSecretStartOffset(String key, int audioDataLength, int metadataBytesUsed, int secretLength, int nLsb, boolean randomStart) {
+    private int getSecretStartOffset(String key, int audioDataLength, int metadataEndOffset, int secretLength, int nLsb, boolean randomStart) {
         if (!randomStart) {
-            return metadataBytesUsed;
+            return metadataEndOffset;
         }
         long secretBytesNeededInAudio = (long)Math.ceil((double)secretLength * 8 / nLsb);
-        int availableRandomRange = (int)(audioDataLength - metadataBytesUsed - secretBytesNeededInAudio);
+        int availableRandomRange = (int)(audioDataLength - metadataEndOffset - secretBytesNeededInAudio);
 
         if (availableRandomRange <= 0) {
-            return metadataBytesUsed;
+            return metadataEndOffset;
         }
 
         long seed = 0;
         for (char c : key.toCharArray()) seed += c;
         Random random = new Random(seed);
 
-        return metadataBytesUsed + random.nextInt(availableRandomRange);
+        return metadataEndOffset + random.nextInt(availableRandomRange);
     }
-
-    // --- UNCHANGED OR MINORLY CHANGED METHODS BELOW ---
 
     @Override
     public double calculatePSNR(Path originalFile, Path stegoFile) throws Exception {
