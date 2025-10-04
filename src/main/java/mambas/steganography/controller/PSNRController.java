@@ -29,14 +29,15 @@ public class PSNRController implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            validateInputs();
-            view.showMessage("Calculating PSNR...");
-            double psnr = service.calculatePSNR(originalFile, stegoFile);
-            view.showSuccess(String.format("PSNR value is: %.2f dB", psnr));
+            // validateInputs();
+            // view.showMessage("Calculating PSNR...");
+            // double psnr = service.calculatePSNR(originalFile, stegoFile);
+            // view.showSuccess(String.format("PSNR value is: %.2f dB", psnr));
+            view.showMessage("Not implemented yet.");
             return 0;
         } catch (Exception e) {
             view.showError(e.getMessage());
-            // e.printStackTrace(); // Uncomment for debugging
+            e.printStackTrace(); // Uncomment for debugging
             return 1;
         }
     }

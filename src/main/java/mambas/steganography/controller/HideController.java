@@ -50,13 +50,6 @@ public class HideController implements Callable<Integer> {
             view.showMessage("Starting hiding process...");
             service.hideMessage(coverFile, secretFile, outputFile, options);
             view.showSuccess("Message successfully hidden into: " + outputFile.toAbsolutePath());
-
-            double psnr = service.calculatePSNR(coverFile, outputFile);
-            view.showMessage(String.format("Audio quality (PSNR): %.2f dB", psnr));
-            if (psnr < 30) {
-                view.showMessage("Warning: PSNR value below 30 dB indicates possible significant audio degradation.");
-            }
-
             return 0;
         } catch (Exception e) {
             view.showError(e.getMessage());

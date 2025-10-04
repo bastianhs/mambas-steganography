@@ -57,6 +57,7 @@
    ```
 
    Example for comparing original and extracted files with PSNR (Peak Signal-to-Noise Ratio):
+   (Not implemented yet...)
    ```bash
    java -jar target/steganography-1.0-SNAPSHOT.jar psnr \
    --original="path/to/your/music.mp3" \
